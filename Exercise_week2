@@ -1,0 +1,188 @@
+import numpy as np
+def calculate_req_tx_power(pr, gt, gr, lambd, d):
+  return pr/(gt*gr*(lambd/(4*np.pi*d))**2)  #=Pt
+
+c = 3e8
+f_c = 5e9
+wavelength = c/f_c
+p_dbm = 1
+
+
+# Problem 1
+p_w = (10**(p_dbm/10))/1000
+pr_d10 = calculate_req_tx_power(p_w, 1, 1, wavelength, 10)
+pr_d100= calculate_req_tx_power(p_w, 1, 1, wavelength,100)
+print(f"At distance 10m: {pr_d10/1000} kW, at distance 100 m: {pr_d100/1000} kW")
+
+# Problem 2
+#The delay spread in a two-ray model can be calculated using the difference in path lengths of the two rays. 
+#The path length of the direct ray (d1) is just the transmitter-receiver separation, 
+#and the path length of the reflected ray (d2) can be calculated using Pythagoras’ theorem.
+
+#The path length of the direct ray (d1) is just the transmitter-receiver separation: d1 = d = 100m
+#The path length of the reflected ray (d2) can be calculated using Pythagoras’ theorem
+#Delay spread can be found by finding the difference between d1 and d2 and dividing it by c.
+#When d is very large compared to h we use taylor series approx. p.64 (35)
+d = 100
+ht= 10
+hr= 2
+d1=np.sqrt((ht+hr)**2+d**2)
+
+delta_d = np.sqrt((ht+hr)**2+d**2)- np.sqrt((ht-hr)**2+d**2)
+delay_spread = delta_d/c
+
+print(d1)
+print(delta_d)
+print(delay_spread)
+
+# Problem 2.5
+h_t = 20
+h_r = 3
+f_c = 2e9
+c=3e8
+lamb=c/f_c
+d_c=4*h_t*h_r/lamb
+print(lamb)
+print(d_c)
+#A cell radius of 1600m could be considered 
+#a good size for a suburban macrocell as the user density is low. However, depends under certain conditions:
+# User Density: If the user density in the suburban area is low, a larger cell radius like 1600m can provide coverage to more users with fewer base stations, which can be cost-effective.
+# Geographical Features: The presence of buildings, trees, and other obstacles can affect signal propagation. In a suburban area with few high-rise buildings and less clutter, a larger cell radius might be feasible.
+# Frequency Band: The frequency band used for transmission also influences the cell size. Lower frequencies can propagate further and are less affected by obstacles, making them suitable for larger cells.
+# Quality of Service Requirements: If high data rates are required, smaller cells might be needed to ensure high signal quality at the cell edge.
+# Interference Management: Larger cells can potentially lead to more co-channel interference. Effective interference management techniques would need to be in place.
+# To decrease the cell size (better for urban) we increase the  wavelength (Only true for the two-ray model where power loss does not depend on the wavelength)
+
+
+# Problem 10
+# K is equal to the path gain P_r/P_t at the receiver distance.
+# Calculated as:
+# P_r/P_t = G_t*G_r*([lambda/4*pi*d]**2)
+# First calculate K (G_t=G_r=1) and then use formula: P_r=P_t*K*[d_0/d]*gamma and solve for d
+
+import sympy as sp
+from sympy.abc import x
+## Calculate K
+d_0 = 1 #m
+f_c = 1e9 #Hz 
+c = 3e8 #m/s
+lamb = c/f_c
+
+K = (lamb/(4*np.pi*d_0))**2
+print(K)
+
+P_n = 1e-19 #W from -160dbm (P(W) = 1mW * 10^(-160/10) = 1mW * 10^-16 = 1 * 10^-19 W)
+P_r = 1e-17 #W from -140dbm since SNR_r is 20dB (P_r = SNR + P_n = -140dBm = 1mW *10^(-140/10) = 1mW * 10^-14 = 1*10^-17)
+P_t = 0.01 # W
+gamma = 4
+d = sp.solve(f = P_t * K *(d_0/x)**gamma - P_r)
+print(d)
+
+#Alternitavely we can use formula:
+# P_r(dBm) = P_t(dBm) + K(dB) - 10*gamma*log10[d/d_0] and solve for d
+# K is then calculated by: K(dB) 20*log10*lambda/4*pi*d_0
+
+P_n = -160
+snr = 20
+P_r = P_n + snr
+P_t = 10
+K = 20 * np.math.log(lamb/(4*np.pi*d_0), 10)
+d_2 = sp.solve(f = P_t + K - 10 * gamma * sp.log(x,10) - P_r)
+print(d_2)
+
+# Problem 15
+# a) Find the parameters of single-slope path loss model plus log-normal shadowing that best fit this data assuming K is calculated from free-space path loss at the reference distance d_r = 1 m.
+f_c = 2e9 #hz
+d_r = 1 #m
+lamb = 3e8/f_c
+# Start by calculating K
+
+K = 20 * np.math.log(lamb/(4*np.pi*d_r), 10)
+print(K)
+
+# Calculate path loss exponent based on the measurements.
+distances = [5, 25, 65, 110, 400, 1000]
+path_loss = [-60, -80, -105, -115, -135, -150]
+
+# Perform least squares using formula:
+
+# F(gamma) = sum of 5 with i=1 [M_measured(d_i) - M_model(d_i)]**2
+# M_model(d_i) = K - 10 * gamma * log10(d_i)
+
+# Expression representing the sum of squared difference between the measured path loss and the path loss predicted by the mode for each distance.
+# Where x represents path loss exponent in the model (gamma).
+# here path_loss[0] is the M_measured(d_i)
+expr = (path_loss[0] - K + 10 * np.math.log(distances[0], 10) * x)**2
+
+# In the loop d and p are variables that take on each element of the arrays, and zip iterates over the lists simultaneously
+# They stand for measured (p) and model (d) d_i
+for d, p in zip(distances[1:], path_loss[1:]): #[1:] means to take all elements starting from index 1 (the 2nd element), through the end of the list (: part)
+  expr += (p - K + 10*np.math.log(d, 10)*x)**2
+
+print ("Resulting expression:")
+print (sp.simplify(expr))
+print ("Differentiate and solve for x:")
+der = sp.diff(expr, x) # calculates derivative of the expression with respect to x to find the minimum of the expression
+print (der)
+gamma = sp.solve(der)[0] # solves the derivative equatio to find x value that minimizes the expression. It is the path loss exponent that best fits the data
+print(f"x = {gamma}") # f outside quotation marks is used for string formatting (f-string)
+
+
+# b) Find the path loss at 2 km based on this model
+
+# variance can be estimated by:
+
+# sigma^2_psi_dB = 1/5 sum of 5, i=1 [M_measured(d_i) - M_model(d_i)]**2
+
+# where psi means shadowing and sigma - variance
+# we use gamma that we found above
+
+# We now want to find the log-normal shadowing parameters
+
+differences = [] # initialize empty list to store the squared differences between measured and predicted path loss
+
+# Iterate loop over each distance and corresponding path loss measurement:
+for d, p in zip(distances, path_loss):
+    
+    # calculate path loss predicted by the model for current distance d. K is constant, gamma is path loss exponent and d is distance.
+    model_prediction = K - 10*gamma*np.math.log(d, 10)
+    # Calculates the squared difference between the measured path loss (p) and the model prediction. It is then added to the list of differences.
+    differences.append((p - model_prediction)**2) # append adds an item to the end of a list (differences)
+
+# calculate the mean (average) of these squared differences. Equivalent to calculating the variance of log-normal shadowing component.    
+var_log_normal = np.mean(np.array(differences), dtype=np.float64) #np.array is used to enable the us of np.mean. dtype specifies that elements should be treated as floating point numbers
+print(var_log_normal)
+
+# The pathloss at 2km can be found by:
+# P_L(dB) = - K (dB) + 10*gamma*log10(d/d_r)
+
+d = 2000
+P_L = - K + 10 * gamma * np.log10(d/d_r)
+print(f"Path loss at 2 km: {P_L} dB")
+
+# c) Find the outage probability at a distance d assuming the received power at d due to path loss alone is 10 dB above the required power for non-outage
+
+# The outage occurs when P_r < P_req. In dB, this is equivalent to 10*log10(P_r) < 10*log10(P_req), or log10(P_r) < log10(P_req)
+# Since the logarithm of P_r has a normal distribution (due to the log-normal shadowing), we can calculate the outage probability as the probability that a normally-distributed random variable is less than log10(P_req)
+# Can be done using CDF of the normal distribution
+# For this we need the variance sigma^2_psi(dB), and we know that the power is 10 dB above the required power
+# We can calculate the cumulative distribution function (CDF) of the normal distribution with the calculated variance and mean = 0 to get the outage probability:
+
+from scipy.stats import norm
+import numpy as np
+
+# Calculate the standart deviation of the shadowing component by taking the square root of its variance.
+stddev_shadowing = np.sqrt(var_log_normal)
+
+# Create a normal distribution object with mean 0 and standard deviation to be equal to the standard deviation of the shadowing component.
+# This is because in a log-normal shadowing model, the logarithm of the shadowing component follows a normal distribution.
+dist = norm(0, stddev_shadowing)
+
+# Calculate the outage probability.
+outage_prob = 1 - dist.cdf(10) # CDF function calculates CDF of the normal distribution, which gives probability that a random variable from this distribution is less than or equal to a given value.
+
+# In this case, it calculates the probability that the shadowing component (in dB) is less than or equal to 10 dB. 
+# Subtracting this from 1 gives the probability that the shadowing component is greater than 10 dB, which is when an outage occurs.
+# (since it’s assumed that the received power at distance d due to path loss alone is 10 dB above the required power for non-outage).
+
+print (outage_prob * 100)
